@@ -8,5 +8,6 @@ CLAUDE.md
 bin/
 obj/
 dist/
+artifacts/
 *.user
 .vs/

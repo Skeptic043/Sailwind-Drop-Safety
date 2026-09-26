@@ -1,0 +1,9 @@
+{
+  "name": "Sailwind_Drop_Safety",
+  "version_number": "1.0.0",
+  "website_url": "https://github.com/Skeptic043/Sailwind-Drop-Safety",
+  "description": "Stop dropping things by accident. The pick up/interact button no longer lets go of what you're holding.",
+  "dependencies": [
+    "BepInEx-BepInExPack-5.4.2305"
+  ]
+}
