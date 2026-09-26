@@ -1,0 +1,66 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <AssemblyName>DropSafety</AssemblyName>
+    <RootNamespace>DropSafety</RootNamespace>
+    <Version>1.0.0</Version>
+    <Product>Drop Safety</Product>
+    <Description>Stops Sailwind from dropping your held item when you release the pick-up button.</Description>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <DebugType>portable</DebugType>
+    <!-- Keep local folder paths out of the DLL so builds from any checkout are byte-identical. -->
+    <PathMap>$(MSBuildProjectDirectory)=src</PathMap>
+    <!-- Compile against the game's own framework assemblies instead of the NETStandard.Library
+         reference pack. BepInEx's 0Harmony.dll exposes System.Reflection.Emit.Label from mscorlib,
+         which the netstandard2.0 reference pack does not contain. -->
+    <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
+  </PropertyGroup>
+
+  <!-- Game and loader folders. Override on the command line, e.g.
+       dotnet build src -c Release -p:SailwindManaged="D:\Games\Sailwind\Sailwind_Data\Managed" -p:BepInExCore="D:\Games\Sailwind\BepInEx\core" -->
+  <PropertyGroup>
+    <SailwindManaged Condition="'$(SailwindManaged)' == ''">C:\Steam Games\steamapps\common\Sailwind\Sailwind_Data\Managed</SailwindManaged>
+    <BepInExCore Condition="'$(BepInExCore)' == ''">$(LOCALAPPDATA)\SailwindModSynchronizer\packs\default\instance\BepInEx\core</BepInExCore>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="mscorlib">
+      <HintPath>$(SailwindManaged)\mscorlib.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="netstandard">
+      <HintPath>$(SailwindManaged)\netstandard.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="System.Core">
+      <HintPath>$(SailwindManaged)\System.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(SailwindManaged)\Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Oculus.VR">
+      <HintPath>$(SailwindManaged)\Oculus.VR.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>$(SailwindManaged)\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(SailwindManaged)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="BepInEx">
+      <HintPath>$(BepInExCore)\BepInEx.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(BepInExCore)\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>

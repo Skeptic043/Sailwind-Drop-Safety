@@ -1,0 +1,12 @@
+# Internal workflow records (keep local, never publish)
+AGENTS.md
+CLAUDE.md
+.local/
+.claude/
+
+# Build output
+bin/
+obj/
+dist/
+*.user
+.vs/
