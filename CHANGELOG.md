@@ -4,7 +4,7 @@
 
 ### New
 
-- Added `InventoryItemsOnly` to limit drop protection to inventory-sized items while letting larger items drop normally. The option is off by default and works with both `DisableDrop` and `RequireModifier`.
+- Added `InventoryItemsOnly` to limit drop protection to inventory-sized items while letting larger items drop normally. The option is off by default and works with `RequireModifier`.
 
 ## 1.0.0
 
