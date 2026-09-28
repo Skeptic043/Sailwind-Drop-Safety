@@ -16,6 +16,7 @@ namespace DropSafety
     internal static class GoPointerPatch
     {
         private static AccessTools.FieldRef<GoPointer, float> throwPowerRef;
+        private static AccessTools.FieldRef<ShipItem, bool> inRangeOfWallRef;
         private static bool reportedMismatch;
 
         /// <summary>True once the transpiler has rewritten both PickUp checks.</summary>
@@ -37,6 +38,14 @@ namespace DropSafety
                 return false;
             }
             throwPowerRef = AccessTools.FieldRefAccess<GoPointer, float>(powerField);
+
+            FieldInfo wallRangeField = AccessTools.Field(typeof(ShipItem), "inRangeOfWall");
+            if (wallRangeField == null || wallRangeField.IsStatic || wallRangeField.FieldType != typeof(bool))
+            {
+                Plugin.Log.LogError("Drop Safety is inactive: ShipItem.inRangeOfWall was not found. The game may have changed.");
+                return false;
+            }
+            inRangeOfWallRef = AccessTools.FieldRefAccess<ShipItem, bool>(wallRangeField);
 
             harmony.Patch(original, transpiler: new HarmonyMethod(typeof(GoPointerPatch), nameof(Transpiler)));
             return Active;
@@ -62,7 +71,7 @@ namespace DropSafety
             MethodInfo releasedHook = AccessTools.Method(typeof(GoPointerPatch), nameof(PickUpReleased));
             MethodInfo heldHook = AccessTools.Method(typeof(GoPointerPatch), nameof(PickUpHeld));
 
-            // Rewrite the later site first so the earlier index stays valid when the list shrinks.
+            // Both replacements preserve the original instruction count and stack shape.
             var sites = new[]
             {
                 new { Index = keyUpIndex, IsRelease = true },
@@ -74,27 +83,14 @@ namespace DropSafety
                 CodeInstruction load = code[site.Index];
                 CodeInstruction call = code[site.Index + 1];
 
-                if (site.IsRelease)
-                {
-                    // Was: ldc.i4.8; call GetKeyUp(InputName)   stack: -> bool
-                    // Now: ldarg.0;  call PickUpReleased(GoPointer)  stack: -> bool
-                    var loadThis = new CodeInstruction(OpCodes.Ldarg_0);
-                    TakeLabelsAndBlocks(loadThis, load);
-                    var hook = new CodeInstruction(OpCodes.Call, releasedHook);
-                    TakeLabelsAndBlocks(hook, call);
-                    code[site.Index] = loadThis;
-                    code[site.Index + 1] = hook;
-                }
-                else
-                {
-                    // Was: ldc.i4.8; call GetKey(InputName)   stack: -> bool
-                    // Now: call PickUpHeld()                  stack: -> bool
-                    var hook = new CodeInstruction(OpCodes.Call, heldHook);
-                    TakeLabelsAndBlocks(hook, load);
-                    TakeLabelsAndBlocks(hook, call);
-                    code[site.Index] = hook;
-                    code.RemoveAt(site.Index + 1);
-                }
+                // Was: ldc.i4.8; call GetKey[Up](InputName)   stack: -> bool
+                // Now: ldarg.0;  call PickUpReleased/Held(GoPointer)  stack: -> bool
+                var loadThis = new CodeInstruction(OpCodes.Ldarg_0);
+                TakeLabelsAndBlocks(loadThis, load);
+                var hook = new CodeInstruction(OpCodes.Call, site.IsRelease ? releasedHook : heldHook);
+                TakeLabelsAndBlocks(hook, call);
+                code[site.Index] = loadThis;
+                code[site.Index + 1] = hook;
             }
 
             Active = true;
@@ -106,26 +102,60 @@ namespace DropSafety
         {
             if (!GameInput.GetKeyUp(InputName.PickUp))
                 return false;
-            if (ClickDropAllowedNow())
+            if (ClickDropAllowedNow(pointer))
                 return true;
 
-            // Blocked release: drop any power built up so a later Throw tap stays a plain drop.
+            // Protection blocks free dropping, but a valid native wall placement may proceed.
+            // Clear power in either case so mounting cannot schedule a delayed throw and a
+            // blocked release cannot turn a later Throw tap into a throw.
             if (pointer != null)
                 throwPowerRef(pointer) = 0f;
-            return false;
+            return CanMountHeldItem(pointer);
         }
 
         /// <summary>Replaces GameInput.GetKey(InputName.PickUp) inside LateUpdate.</summary>
-        public static bool PickUpHeld()
+        public static bool PickUpHeld(GoPointer pointer)
         {
-            return GameInput.GetKey(InputName.PickUp) && ClickDropAllowedNow();
+            return GameInput.GetKey(InputName.PickUp) && ClickDropAllowedNow(pointer);
         }
 
-        private static bool ClickDropAllowedNow()
+        private static bool ClickDropAllowedNow(GoPointer pointer)
         {
+            bool inventoryItemsOnly = Plugin.InventoryItemsOnly.Value;
+            bool isProtectedInventoryItem = !inventoryItemsOnly || HeldItemMatchesInventoryProtection(pointer);
             bool requireModifier = Plugin.RequireModifier.Value;
             bool modifierHeld = requireModifier && Plugin.HasModifierKey && Input.GetKey(Plugin.ModifierKeyCode);
-            return DropDecision.IsClickDropAllowed(Plugin.DisableDrop.Value, requireModifier, modifierHeld);
+            return DropDecision.IsClickDropAllowed(Plugin.DisableDrop.Value, requireModifier, modifierHeld,
+                inventoryItemsOnly, isProtectedInventoryItem);
+        }
+
+        private static bool HeldItemMatchesInventoryProtection(GoPointer pointer)
+        {
+            if (pointer == null)
+                return false;
+            var heldItem = pointer.GetHeldItem();
+            if (heldItem == null)
+                return false;
+
+            ShipItem shipItem = heldItem.GetComponent<ShipItem>();
+            if (shipItem == null)
+                return false;
+            ShipItemBottle bottle = heldItem.GetComponent<ShipItemBottle>();
+            return InventoryItemRule.IsProtectedInventoryItem(true, shipItem.big, bottle != null,
+                bottle != null ? bottle.GetCapacity() : 0f);
+        }
+
+        private static bool CanMountHeldItem(GoPointer pointer)
+        {
+            if (pointer == null)
+                return false;
+            var heldItem = pointer.GetHeldItem();
+            if (heldItem == null)
+                return false;
+            ShipItem shipItem = heldItem.GetComponent<ShipItem>();
+            // Match ShipItem.OnDrop's wall-attachment condition using its cached wall probe.
+            return shipItem != null && shipItem.sold && shipItem.wallAttachment
+                && inRangeOfWallRef(shipItem) && !shipItem.forceDisableRedOutline;
         }
 
         private static void TakeLabelsAndBlocks(CodeInstruction target, CodeInstruction source)

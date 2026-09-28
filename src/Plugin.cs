@@ -13,7 +13,7 @@ namespace DropSafety
     {
         public const string Guid = "com.skeptic043.sailwind.dropsafety";
         public const string PluginName = "Drop Safety";
-        public const string Version = "1.0.0";
+        public const string Version = "1.1.0";
 
         private const string Section = "Drop Safety";
 
@@ -21,6 +21,7 @@ namespace DropSafety
         internal static ConfigEntry<bool> DisableDrop;
         internal static ConfigEntry<bool> RequireModifier;
         internal static ConfigEntry<string> ModifierKey;
+        internal static ConfigEntry<bool> InventoryItemsOnly;
 
         /// <summary>Parsed ModifierKey. Only meaningful while HasModifierKey is true.</summary>
         internal static KeyCode ModifierKeyCode;
@@ -44,6 +45,9 @@ namespace DropSafety
                 "The key to hold when RequireModifier is on. Type a key name such as LeftAlt, RightControl or Mouse3. "
                 + "Capitals and spaces don't matter, so left alt works too. Leave it blank to turn it off.",
                 null, new ConfigurationManagerAttributes { Order = 1 }));
+            InventoryItemsOnly = Config.Bind(Section, "InventoryItemsOnly", false, new ConfigDescription(
+                "Only apply drop protection to items that fit in your inventory.",
+                null, new ConfigurationManagerAttributes { Order = 0 }));
 
             keyNames = KeyNameParser.BuildMap<KeyCode>();
             ModifierKey.SettingChanged += (sender, args) => RefreshModifierKey();

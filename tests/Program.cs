@@ -13,7 +13,7 @@ namespace DropSafety.Tests
     {
         private const string ExpectedGuid = "com.skeptic043.sailwind.dropsafety";
         private const string ExpectedName = "Drop Safety";
-        private const string ExpectedVersion = "1.0.0";
+        private const string ExpectedVersion = "1.1.0";
 
         private static int passed;
         private static readonly List<string> failures = new List<string>();
@@ -26,6 +26,12 @@ namespace DropSafety.Tests
 
             Section("Decision function");
             DecisionTable();
+
+            Section("Inventory item rule");
+            InventoryRule();
+
+            Section("Production hooks with game/input test doubles");
+            HookHarness.Run(Check);
 
             Section("Matcher on synthetic IL");
             SyntheticMatcher();
@@ -73,7 +79,26 @@ namespace DropSafety.Tests
                 bool actual = DropDecision.IsClickDropAllowed(c.disable, c.require, c.held);
                 Check($"IsClickDropAllowed(disableDrop={c.disable}, require={c.require}, held={c.held}) == {c.expected}",
                     actual == c.expected);
+                foreach (bool inventoryOnly in new[] { false, true })
+                foreach (bool inventoryItem in new[] { false, true })
+                {
+                    bool expected = inventoryOnly && !inventoryItem ? true : c.expected;
+                    Check($"Filtered decision(disable={c.disable}, require={c.require}, held={c.held}, inventoryOnly={inventoryOnly}, inventoryItem={inventoryItem}) == {expected}",
+                        DropDecision.IsClickDropAllowed(c.disable, c.require, c.held, inventoryOnly, inventoryItem) == expected);
+                }
             }
+        }
+
+        private static void InventoryRule()
+        {
+            Check("small ShipItem is protected", InventoryItemRule.IsProtectedInventoryItem(true, false, false, 0f));
+            Check("large ShipItem is excluded", !InventoryItemRule.IsProtectedInventoryItem(true, true, false, 0f));
+            Check("non-ShipItem is excluded", !InventoryItemRule.IsProtectedInventoryItem(false, false, false, 0f));
+            Check("bottle below capacity 10 is protected", InventoryItemRule.IsProtectedInventoryItem(true, false, true, 9.99f));
+            Check("bottle at capacity 10 is protected", InventoryItemRule.IsProtectedInventoryItem(true, false, true, 10f));
+            Check("bottle above capacity 10 is excluded", !InventoryItemRule.IsProtectedInventoryItem(true, false, true, 10.01f));
+            Check("large bottle is excluded even at small capacity", !InventoryItemRule.IsProtectedInventoryItem(true, true, true, 1f));
+            Check("non-bottle ignores capacity", InventoryItemRule.IsProtectedInventoryItem(true, false, false, 100f));
         }
 
         // ---- synthetic matcher cases ---------------------------------------------
@@ -160,6 +185,35 @@ namespace DropSafety.Tests
                 if (lateUpdate == null || !lateUpdate.HasBody) return;
                 Check("GoPointer.LateUpdate is an instance method (ldarg.0 is 'this')", !lateUpdate.IsStatic);
 
+                MethodDefinition getHeld = goPointer.Methods.SingleOrDefault(m => m.Name == "GetHeldItem" && !m.HasParameters);
+                Check("GoPointer.GetHeldItem is public instance PickupableItem ()",
+                    getHeld != null && getHeld.IsPublic && !getHeld.IsStatic && getHeld.ReturnType.FullName == "PickupableItem");
+                TypeDefinition pickupable = asm.MainModule.GetType("PickupableItem");
+                FieldDefinition big = pickupable?.Fields.SingleOrDefault(f => f.Name == "big");
+                Check("PickupableItem.big is public instance bool",
+                    big != null && big.IsPublic && !big.IsStatic && big.FieldType.FullName == "System.Boolean");
+                TypeDefinition shipItem = asm.MainModule.GetType("ShipItem");
+                FieldDefinition wallAttachment = shipItem?.Fields.SingleOrDefault(f => f.Name == "wallAttachment");
+                Check("ShipItem.wallAttachment is public instance bool",
+                    wallAttachment != null && wallAttachment.IsPublic && !wallAttachment.IsStatic
+                    && wallAttachment.FieldType.FullName == "System.Boolean");
+                FieldDefinition wallRange = shipItem?.Fields.SingleOrDefault(f => f.Name == "inRangeOfWall");
+                Check("ShipItem.inRangeOfWall is private instance bool",
+                    wallRange != null && wallRange.IsPrivate && !wallRange.IsStatic
+                    && wallRange.FieldType.FullName == "System.Boolean");
+                FieldDefinition sold = shipItem?.Fields.SingleOrDefault(f => f.Name == "sold");
+                Check("ShipItem.sold is public instance bool",
+                    sold != null && sold.IsPublic && !sold.IsStatic && sold.FieldType.FullName == "System.Boolean");
+                FieldDefinition forceDisable = asm.MainModule.GetType("GoPointerButton")?.Fields.SingleOrDefault(f => f.Name == "forceDisableRedOutline");
+                Check("GoPointerButton.forceDisableRedOutline is public instance bool",
+                    forceDisable != null && forceDisable.IsPublic && !forceDisable.IsStatic
+                    && forceDisable.FieldType.FullName == "System.Boolean");
+                TypeDefinition bottle = asm.MainModule.GetType("ShipItemBottle");
+                MethodDefinition capacity = bottle?.Methods.SingleOrDefault(m => m.Name == "GetCapacity" && !m.HasParameters);
+                Check("ShipItemBottle.GetCapacity is public instance float ()",
+                    capacity != null && capacity.IsPublic && !capacity.IsStatic && capacity.ReturnType.FullName == "System.Single");
+                Check("ShipItemBottle derives from ShipItem", bottle?.BaseType?.FullName == "ShipItem");
+
                 FieldDefinition power = goPointer.Fields.SingleOrDefault(f => f.Name == "currentThrowPower");
                 Check("GoPointer.currentThrowPower is an instance float field",
                     power != null && !power.IsStatic && power.FieldType.FullName == "System.Single");
@@ -179,6 +233,7 @@ namespace DropSafety.Tests
                     Console.WriteLine($"  GetKeyUp(PickUp) at IL_{body[upIdx].Offset:x4}, GetKey(PickUp) at IL_{body[keyIdx].Offset:x4}");
                     Check("GetKeyUp(PickUp) site is IL_0667 (research note)", body[upIdx].Offset == 0x0667);
                     Check("GetKey(PickUp) site is IL_0624 (research note)", body[keyIdx].Offset == 0x0624);
+                    HookHarness.CheckInstalledTranspiler(lateUpdate, upIdx, keyIdx, Check);
                 }
 
                 // The Throw checks (InputName.Throw = 10) must stay out of the match set.
@@ -243,7 +298,7 @@ namespace DropSafety.Tests
             {
                 ModuleDefinition module = asm.MainModule;
                 Check("assembly name is DropSafety", asm.Name.Name == "DropSafety");
-                Check("assembly version is 1.0.0.0", asm.Name.Version == new Version(1, 0, 0, 0));
+                Check("assembly version is 1.1.0.0", asm.Name.Version == new Version(1, 1, 0, 0));
 
                 var pluginAttrs = module.Types
                     .SelectMany(t => t.CustomAttributes.Select(a => (type: t, attr: a)))
@@ -286,7 +341,7 @@ namespace DropSafety.Tests
 
                 // Hook signatures decide stack balance of the rewrite:
                 //   ldc.i4.8; call GetKeyUp(InputName)  -> ldarg.0; call PickUpReleased(GoPointer)   (net +1 bool)
-                //   ldc.i4.8; call GetKey(InputName)    -> call PickUpHeld()                         (net +1 bool)
+                //   ldc.i4.8; call GetKey(InputName)    -> ldarg.0; call PickUpHeld(GoPointer)       (net +1 bool)
                 TypeDefinition patch = module.GetType("DropSafety.GoPointerPatch");
                 Check("DropSafety.GoPointerPatch exists", patch != null);
                 if (patch != null)
@@ -297,9 +352,10 @@ namespace DropSafety.Tests
                         released != null && released.IsStatic && released.IsPublic
                         && released.ReturnType.FullName == "System.Boolean"
                         && released.Parameters.Count == 1 && released.Parameters[0].ParameterType.FullName == "GoPointer");
-                    Check("PickUpHeld is static bool ()",
+                    Check("PickUpHeld is static bool (GoPointer)",
                         held != null && held.IsStatic && held.IsPublic
-                        && held.ReturnType.FullName == "System.Boolean" && held.Parameters.Count == 0);
+                        && held.ReturnType.FullName == "System.Boolean"
+                        && held.Parameters.Count == 1 && held.Parameters[0].ParameterType.FullName == "GoPointer");
 
                     // The hooks must read only the PickUp input (8), never Throw (10).
                     foreach (MethodDefinition hook in new[] { released, held }.Where(m => m != null))
@@ -308,7 +364,40 @@ namespace DropSafety.Tests
                         int pickUps = CountCalls(hookOps, 8, IlPatternMatcher.GetKeyUpTarget) + CountCalls(hookOps, 8, IlPatternMatcher.GetKeyTarget);
                         int throws = CountCalls(hookOps, 10, IlPatternMatcher.GetKeyUpTarget) + CountCalls(hookOps, 10, IlPatternMatcher.GetKeyTarget);
                         Check($"{hook.Name} reads PickUp once and never Throw", pickUps == 1 && throws == 0);
+                        var gateCalls = hook.Body.Instructions.Where(i => i.Operand is MethodReference m
+                            && m.DeclaringType.FullName == patch.FullName && m.Name == "ClickDropAllowedNow").ToList();
+                        Check($"{hook.Name} passes its pointer to the shared filter gate",
+                            gateCalls.Count == 1 && gateCalls[0].Previous?.OpCode.Code == Code.Ldarg_0
+                            && ((MethodReference)gateCalls[0].Operand).Parameters.Count == 1);
                     }
+
+                    MethodDefinition filter = patch.Methods.SingleOrDefault(m => m.Name == "HeldItemMatchesInventoryProtection");
+                    var filterCalls = filter?.Body.Instructions.Select(i => i.Operand).OfType<MethodReference>().ToList()
+                        ?? new List<MethodReference>();
+                    Check("held-item filter reads GoPointer.GetHeldItem",
+                        filterCalls.Count(m => m.DeclaringType.FullName == "GoPointer" && m.Name == "GetHeldItem") == 1);
+                    Check("held-item filter resolves the held object's ShipItem component",
+                        filterCalls.OfType<GenericInstanceMethod>().Count(m => m.Name == "GetComponent"
+                            && m.GenericArguments.Count == 1 && m.GenericArguments[0].FullName == "ShipItem") == 1);
+                    Check("held-item filter resolves the held object's ShipItemBottle component",
+                        filterCalls.OfType<GenericInstanceMethod>().Count(m => m.Name == "GetComponent"
+                            && m.GenericArguments.Count == 1 && m.GenericArguments[0].FullName == "ShipItemBottle") == 1);
+                    Check("held-item filter reads native bottle capacity",
+                        filterCalls.Count(m => m.DeclaringType.FullName == "ShipItemBottle" && m.Name == "GetCapacity") == 1);
+                    Check("inventory eligibility does not exclude wall attachments",
+                        filter != null && !filter.Body.Instructions.Any(i => i.Operand is FieldReference f
+                            && f.Name == "wallAttachment"));
+                    Check("held-item filter uses shared tested inventory rule",
+                        filterCalls.Count(m => m.DeclaringType.FullName == "DropSafety.InventoryItemRule" && m.Name == "IsProtectedInventoryItem") == 1);
+                    MethodDefinition mount = patch.Methods.SingleOrDefault(m => m.Name == "CanMountHeldItem");
+                    var mountFields = mount?.Body.Instructions.Select(i => i.Operand).OfType<FieldReference>().Select(f => f.Name).ToList()
+                        ?? new List<string>();
+                    Check("wall-mount gate reads native sold, wall attachment, cached wall range and placement obstruction state",
+                        new[] { "sold", "wallAttachment", "inRangeOfWallRef", "forceDisableRedOutline" }.All(mountFields.Contains));
+                    Check("release hook calls wall-mount gate",
+                        released.Body.Instructions.Any(i => i.Operand is MethodReference m && m.Name == "CanMountHeldItem"));
+                    Check("held hook never calls wall-mount gate",
+                        !held.Body.Instructions.Any(i => i.Operand is MethodReference m && m.Name == "CanMountHeldItem"));
                 }
             }
         }
@@ -418,11 +507,11 @@ namespace DropSafety.Tests
                     .Select(i => (GenericInstanceMethod)i.Operand).ToList();
                 Console.WriteLine("  Bind keys in order: " + string.Join(", ", keys));
                 Console.WriteLine("  Bind types in order: " + string.Join(", ", binds.Select(b => b.GenericArguments[0].FullName)));
-                Check("three Bind calls with keys DisableDrop, RequireModifier, ModifierKey in that order",
-                    binds.Count == 3 && keys.SequenceEqual(new[] { "DisableDrop", "RequireModifier", "ModifierKey" }));
-                Check("Bind types are bool, bool, string",
+                Check("four Bind calls with keys DisableDrop, RequireModifier, ModifierKey, InventoryItemsOnly in that order",
+                    binds.Count == 4 && keys.SequenceEqual(new[] { "DisableDrop", "RequireModifier", "ModifierKey", "InventoryItemsOnly" }));
+                Check("Bind types are bool, bool, string, bool",
                     binds.Select(b => b.GenericArguments[0].FullName)
-                        .SequenceEqual(new[] { "System.Boolean", "System.Boolean", "System.String" }));
+                        .SequenceEqual(new[] { "System.Boolean", "System.Boolean", "System.String", "System.Boolean" }));
                 Check("every Bind uses the ConfigDescription overload",
                     binds.All(b => b.Parameters.Count == 4 && b.Parameters[3].ParameterType.FullName == "BepInEx.Configuration.ConfigDescription"));
 
@@ -431,11 +520,15 @@ namespace DropSafety.Tests
                     "Prevents the pick up/interact button from dropping what you're holding.",
                     "Pick up/interact button only drops held item while ModifierKey is held. Works with DisableDrop enabled.",
                     "The key to hold when RequireModifier is on. Type a key name such as LeftAlt, RightControl or Mouse3. Capitals and spaces don't matter, so left alt works too. Leave it blank to turn it off.",
+                    "Only apply drop protection to items that fit in your inventory.",
                 };
                 var awakeStrings = body.Where(i => i.OpCode.Code == Code.Ldstr).Select(i => (string)i.Operand).ToList();
                 for (int d = 0; d < descriptions.Length; d++)
                     Check($"description {d + 1} is exact", awakeStrings.Contains(descriptions[d]));
                 Check("ModifierKey default is \"LeftAlt\"", awakeStrings.Contains("LeftAlt"));
+                Instruction inventoryKey = body.SingleOrDefault(i => i.OpCode.Code == Code.Ldstr && (string)i.Operand == "InventoryItemsOnly");
+                Check("InventoryItemsOnly defaults to false",
+                    inventoryKey?.Next != null && IlOp.DecodeLdcI4(inventoryKey.Next.OpCode.Name, inventoryKey.Next.Operand) == 0);
                 Check("no semicolons in descriptions", descriptions.All(s => !s.Contains(';')));
 
                 // ConfigurationManager reads the tag by type name and copies public instance fields.
@@ -457,7 +550,7 @@ namespace DropSafety.Tests
                     }
                 }
                 Console.WriteLine("  Order tags in bind order: " + string.Join(", ", orders));
-                Check("Order tags are 3, 2, 1 (higher shows first)", orders.SequenceEqual(new[] { 3, 2, 1 }));
+                Check("Order tags are 3, 2, 1, 0 (higher shows first)", orders.SequenceEqual(new[] { 3, 2, 1, 0 }));
             }
         }
 

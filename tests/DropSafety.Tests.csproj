@@ -19,6 +19,8 @@
   <!-- The pure logic under test is shared with the plugin, not copied. -->
   <ItemGroup>
     <Compile Include="..\src\DropDecision.cs" Link="Shared\DropDecision.cs" />
+    <Compile Include="..\src\GoPointerPatch.cs" Link="Shared\GoPointerPatch.cs" />
+    <Compile Include="..\src\InventoryItemRule.cs" Link="Shared\InventoryItemRule.cs" />
     <Compile Include="..\src\IlPatternMatcher.cs" Link="Shared\IlPatternMatcher.cs" />
     <Compile Include="..\src\KeyNameParser.cs" Link="Shared\KeyNameParser.cs" />
   </ItemGroup>

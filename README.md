@@ -16,19 +16,20 @@ Install [Sailwind Drop Safety](https://thunderstore.io/c/sailwind/p/Skeptic043/S
 
 ## How it works
 
-Drop Safety disables dropping items, only allowing items to be dropped by using the Throw key. Optionally, enable the `RequireModifier` option in the config and dropping will only happen when you hold the modifier key. Placing items on tables, shelves, hooks, etc., and placing wall-mounted items both work normally.
+By default, Drop Safety prevents the pick up/interact button (left-click or F) from dropping what you're holding. The Throw key (T) works normally: tap it to drop an item or hold it to throw. Enable `RequireModifier` to allow dropping with the pick up/interact button while holding your chosen modifier key. Placing items on tables, shelves and hooks works normally. `InventoryItemsOnly` can be enabled for Drop Safety to only apply to small items that fit in your inventory.
 
 ## Configuration
 
-After the first launch, close the game and edit `BepInEx/config/com.skeptic043.sailwind.dropsafety.cfg`. This is inside your mod manager profile, or your Sailwind folder for a manual installation. Changes made in-game through Configuration Manager apply straight away.
+After the first launch, close the game and edit `BepInEx/config/com.skeptic043.sailwind.dropsafety.cfg`.
 
 | Setting | Default | Options |
 | --- | --- | --- |
 | `DisableDrop` | `true` | Prevents the pick up/interact button from dropping what you're holding. |
 | `RequireModifier` | `false` | Pick up/interact button only drops held item while `ModifierKey` is held. Works with `DisableDrop` enabled. |
 | `ModifierKey` | `LeftAlt` | The key to hold when `RequireModifier` is on. |
+| `InventoryItemsOnly` | `false` | Only apply drop protection to items that fit in your inventory. |
 
-What happens when you attempt to drop an item:
+What happens when you attempt to drop a protected item with the pick up/interact button, outside a valid placement:
 
 | `DisableDrop` | `RequireModifier` | Result |
 | --- | --- | --- |
@@ -36,7 +37,7 @@ What happens when you attempt to drop an item:
 | either | `true` | Drops only while `ModifierKey` is held |
 | `false` | `false` | Drops like the base game |
 
-Type `ModifierKey` as a single key name, such as `LeftAlt`, `RightControl`, `Mouse3` or `JoystickButton4`. Key names ignore capitalization and spaces, so `left alt` works too. Leave it blank or use `None` to turn it off. Unsupported values stay in the file and produce a warning in the log. The modifier then counts as never held until corrected.
+Type `ModifierKey` as a single key name, such as `LeftAlt`, `RightControl`, `Mouse3` or `JoystickButton4`. Key names ignore capitalization and spaces, so `left alt` works too. Leave it blank or use `None` to turn it off. Unsupported values stay in the file and produce a warning in the log.
 
 ## Compatibility
 
