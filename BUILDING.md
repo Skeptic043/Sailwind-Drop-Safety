@@ -1,34 +1,41 @@
-# Building from source
+# Building Sailwind Drop Safety
 
-Install the .NET SDK (the tests use .NET 10), Sailwind, and BepInEx 5. The project compiles against the game's and BepInEx's own DLLs and never copies them into the repository or the build output.
+## Requirements
+
+- Windows with PowerShell 7 and the .NET 10 SDK (the tests target .NET 10).
+- A local Sailwind installation with BepInEx 5.
+
+Game and loader assemblies are build references only. They are not included in this repository or its packages.
 
 Two MSBuild properties point at those folders:
 
 - `SailwindManaged` is the game's `Sailwind_Data\Managed` folder. Default: `C:\Steam Games\steamapps\common\Sailwind\Sailwind_Data\Managed`
 - `BepInExCore` is the `BepInEx\core` folder. Default: `%LOCALAPPDATA%\SailwindModSynchronizer\packs\default\instance\BepInEx\core`
 
-Run the following from this repository, using the directories for your installations:
+## Build
+
+From the repository folder:
 
 ```powershell
-dotnet build src -c Release -p:SailwindManaged='C:\path\to\Sailwind\Sailwind_Data\Managed' -p:BepInExCore='C:\path\to\BepInEx\core'
+dotnet build src -c Release -p:SailwindManaged='C:\Games\Sailwind\Sailwind_Data\Managed' -p:BepInExCore='C:\Games\Sailwind\BepInEx\core'
 ```
 
-The DLL is written to `src/bin/Release/netstandard2.0/DropSafety.dll`. The build does not change the game installation.
+Use the paths for your own installation or mod profile. The output is `src/bin/Release/netstandard2.0/DropSafety.dll`.
 
-To run the tests, with the same property overrides:
+## Test
 
 ```powershell
-dotnet run --project tests -c Release
+dotnet run --project tests -c Release -p:SailwindManaged='C:\Games\Sailwind\Sailwind_Data\Managed' -p:BepInExCore='C:\Games\Sailwind\BepInEx\core'
 ```
 
-They check the drop rule and the `ModifierKey` parser, confirm the patch still finds exactly what it expects in your installed `Assembly-CSharp.dll`, and check the built plugin's identity, config bindings and references.
+The checks cover the drop rule and the `ModifierKey` parser, confirm the patch still finds exactly what it expects in your installed `Assembly-CSharp.dll`, and check the built plugin's identity, config bindings and references. Any failure makes the command fail.
 
-To build the DLL and create a Thunderstore package ZIP:
+## Package
 
 ```powershell
-./Package.ps1 -SailwindManaged 'C:\path\to\Sailwind\Sailwind_Data\Managed' -BepInExCore 'C:\path\to\BepInEx\core'
+pwsh -File ./Package.ps1 -SailwindManaged 'C:\Games\Sailwind\Sailwind_Data\Managed' -BepInExCore 'C:\Games\Sailwind\BepInEx\core'
 ```
 
-The package and its SHA-256 checksum are written to `artifacts/release/`. The ZIP contains only the package metadata, public documentation, license, icon, and mod DLL. It does not contain game or BepInEx assemblies.
+This builds the mod and writes `artifacts/release/DropSafety-<version>.zip` with `BepInEx/plugins/DropSafety/`, `manifest.json`, `icon.png`, `README.md`, `CHANGELOG.md` and `LICENSE`.
 
 Run `./tools/Render-Icon.ps1` to regenerate the 256×256 icon from its editable shapes.

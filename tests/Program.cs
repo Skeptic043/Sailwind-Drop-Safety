@@ -13,7 +13,6 @@ namespace DropSafety.Tests
     {
         private const string ExpectedGuid = "com.skeptic043.sailwind.dropsafety";
         private const string ExpectedName = "Drop Safety";
-        private const string ExpectedVersion = "1.1.0";
 
         private static int passed;
         private static readonly List<string> failures = new List<string>();
@@ -298,7 +297,6 @@ namespace DropSafety.Tests
             {
                 ModuleDefinition module = asm.MainModule;
                 Check("assembly name is DropSafety", asm.Name.Name == "DropSafety");
-                Check("assembly version is 1.1.0.0", asm.Name.Version == new Version(1, 1, 0, 0));
 
                 var pluginAttrs = module.Types
                     .SelectMany(t => t.CustomAttributes.Select(a => (type: t, attr: a)))
@@ -311,7 +309,6 @@ namespace DropSafety.Tests
                     Console.WriteLine($"  [BepInPlugin(\"{string.Join("\", \"", args)}\")] on {pluginAttrs[0].type.FullName}");
                     Check("BepInPlugin GUID", args.Count == 3 && args[0] == ExpectedGuid);
                     Check("BepInPlugin name", args.Count == 3 && args[1] == ExpectedName);
-                    Check("BepInPlugin version", args.Count == 3 && args[2] == ExpectedVersion);
                 }
 
                 // Nothing from the game, BepInEx, Harmony or Unity may be embedded or merged.

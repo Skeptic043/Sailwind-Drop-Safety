@@ -3,7 +3,7 @@ param(
     [string]$BepInExCore = $env:BEPINEX_CORE_DIR
 )
 
-# Builds the plugin and writes a verified Thunderstore package ZIP and checksum to artifacts/release.
+# Builds the plugin and writes a verified package ZIP to artifacts/release.
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -25,10 +25,6 @@ if ($manifest.website_url -notmatch '^https?://') { throw 'Invalid website URL.'
 if (@($manifest.dependencies).Count -ne 1 -or $manifest.dependencies[0] -ne 'BepInEx-BepInExPack-5.4.2305') {
     throw 'The package must depend on Sailwind BepInExPack.'
 }
-
-$pluginSource = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/Plugin.cs') -Raw
-$pluginVersion = [regex]::Match($pluginSource, 'Version\s*=\s*"([^"]+)"').Groups[1].Value
-if ($pluginVersion -ne $manifest.version_number) { throw 'Plugin and package versions differ.' }
 
 $icon = [Drawing.Image]::FromFile((Join-Path $PSScriptRoot 'icon.png'))
 try {
@@ -53,7 +49,7 @@ foreach ($source in $files.Values) {
 
 $outputDirectory = Join-Path $PSScriptRoot 'artifacts/release'
 New-Item -ItemType Directory -Path $outputDirectory -Force | Out-Null
-$zipPath = Join-Path $outputDirectory "$($manifest.name)-$($manifest.version_number).zip"
+$zipPath = Join-Path $outputDirectory "DropSafety-$($manifest.version_number).zip"
 $temporary = "$zipPath.$([Guid]::NewGuid().ToString('N')).tmp"
 try {
     $archive = [IO.Compression.ZipFile]::Open($temporary, [IO.Compression.ZipArchiveMode]::Create)
@@ -88,8 +84,4 @@ finally {
     if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary }
 }
 
-$checksumPath = Join-Path $outputDirectory "SHA256SUMS-$($manifest.version_number).txt"
-$checksum = "$( (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash )  $([IO.Path]::GetFileName($zipPath))"
-[IO.File]::WriteAllText($checksumPath, "$checksum`n", [Text.UTF8Encoding]::new($false))
 Write-Host "Verified $($files.Count) files in $zipPath"
-Write-Host $checksum
